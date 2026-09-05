@@ -1,0 +1,11 @@
+# Manual Checklist — Xiaomi IR + SRK12CT-S5, 3m line-of-sight
+- [ ] Power ON beeps, louver opens
+- [ ] Cool 24 Auto works
+- [ ] Temp 18 and 30 limits beep
+- [ ] Heat, Dry, Fan, Auto each beep
+- [ ] Fan Low/Med/High/Turbo/Econo each beep
+- [ ] SwingV toggle moves louver
+- [ ] 3D toggle beeps
+- [ ] Sleep + Clean beep
+- [ ] Power OFF beeps, louver closes
+- [ ] If no beep: toggle 152:ON and retry Power ON
