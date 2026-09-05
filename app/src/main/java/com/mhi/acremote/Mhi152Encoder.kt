@@ -2,31 +2,86 @@ package com.mhi.acremote
 
 object Mhi152Encoder {
     const val FREQ = 38000
+    const val HDR_MARK = 3140
+    const val HDR_SPACE = 1630
+    const val BIT_MARK = 370
+    const val ONE_SPACE = 420
+    const val ZERO_SPACE = 1220
+    const val GAP = 30000
+    const val REPEAT = 2
+
+    fun modeBits(m: Mode): Int = when (m) {
+        Mode.AUTO -> 0; Mode.COOL -> 1; Mode.DRY -> 2
+        Mode.FAN -> 3; Mode.HEAT -> 4
+    }
+
+    fun fanBits(f: Fan): Int = when (f) {
+        Fan.AUTO -> 0; Fan.LOW -> 1; Fan.MED -> 2
+        Fan.HIGH -> 3; Fan.TURBO -> 8; Fan.ECONO -> 6
+    }
+
+    fun swingVBits(v: SwingV): Int = when (v) {
+        SwingV.SWING -> 0; SwingV.HIGHEST -> 1; SwingV.HIGH -> 2
+        SwingV.MIDDLE -> 3; SwingV.LOW -> 4; SwingV.LOWEST -> 5
+        SwingV.OFF -> 6
+    }
+
+    fun swingHBits(h: SwingH): Int = when (h) {
+        SwingH.SWING -> 0; SwingH.LEFTMAX -> 1; SwingH.LEFT -> 2
+        SwingH.MIDDLE -> 3; SwingH.RIGHT -> 4; SwingH.RIGHTMAX -> 5
+        SwingH.RIGHTLEFT -> 6; SwingH.LEFTRIGHT -> 7; SwingH.OFF -> 8
+    }
+
     fun buildBytes(s: AcState): ByteArray {
         val b = ByteArray(19)
-        byteArrayOf(0x52, 0xAE.toByte(), 0xC3.toByte(), 0x1A, 0xE5.toByte()).copyInto(b, 0)
-        val modeBits = when (s.mode) {
-            Mode.AUTO -> 0x07; Mode.HEAT -> 0x03; Mode.COOL -> 0x06
-            Mode.DRY -> 0x05; Mode.FAN -> 0x04
+        b[0] = 0xAD.toByte()
+        b[1] = 0x51
+        b[2] = 0x3C
+        b[3] = 0xE5.toByte()
+        var b5 = 0
+        b5 = b5 or (modeBits(s.mode) and 0x07)
+        if (s.power) b5 = b5 or 0x08
+        if (s.clean) {
+            b5 = b5 or 0x20
+            b5 = b5 or 0x40
         }
-        b[5] = ((if (s.power) 0x00 else 0x08) or modeBits).toByte()
+        b[5] = b5.toByte()
         b[7] = ((s.coercedTemp() - 17) and 0x0F).toByte()
-        b[9] = when (s.fan) {
-            Fan.AUTO -> 0x0F; Fan.LOW -> 0x0E; Fan.MED -> 0x0D
-            Fan.HIGH -> 0x0C; Fan.TURBO -> 0x07; Fan.ECONO -> 0x09
-        }.toByte()
-        b[11] = if (s.swingV == SwingV.SWING) 0xE0.toByte() else 0xC0.toByte()
+        b[9] = (fanBits(s.fan) and 0x0F).toByte()
+        var b11 = 0
+        if (s.threeD) {
+            b11 = b11 or 0x02
+            b11 = b11 or 0x10
+        }
+        b11 = b11 or ((swingVBits(s.swingV) and 0x07) shl 5)
+        b[11] = b11.toByte()
+        b[13] = (swingHBits(s.swingH) and 0x0F).toByte()
+        var b15 = 0
+        if (s.sleep) b15 = b15 or 0x40
+        b[15] = b15.toByte()
+        b[17] = 0x80.toByte()
+        var i = 3
+        while (i < 18) {
+            b[i + 1] = (b[i].toInt() xor 0xFF).toByte()
+            i += 2
+        }
         return b
     }
+
     fun toPattern(s: AcState): IntArray {
-        val out = mutableListOf(3200, 1600)
-        for (by in buildBytes(s)) {
-            for (i in 0..7) {
-                out.add(400)
-                out.add(if (((by.toInt() shr i) and 1) == 1) 1200 else 430)
+        val bytes = buildBytes(s)
+        val out = mutableListOf(HDR_MARK, HDR_SPACE)
+        repeat(REPEAT) { r ->
+            for (by in bytes) {
+                for (i in 0..7) {
+                    val bit = (by.toInt() shr i) and 1
+                    out.add(BIT_MARK)
+                    out.add(if (bit == 1) ONE_SPACE else ZERO_SPACE)
+                }
             }
+            out.add(BIT_MARK)
+            if (r < REPEAT - 1) out.add(GAP)
         }
-        out.add(400)
         return out.toIntArray()
     }
 }
