@@ -6,17 +6,25 @@ import kotlinx.coroutines.flow.StateFlow
 
 class RemoteViewModel(
     private val tx: Transmitter,
-    var use152: Boolean = false
+    var use152: Boolean = false,
+    var onPersist: ((AcState, Boolean) -> Unit)? = null
 ) : ViewModel() {
     private val _state = MutableStateFlow(AcState())
     val state: StateFlow<AcState> = _state
 
     fun send(next: AcState): Result<Unit> {
         _state.value = next
+        onPersist?.invoke(next, use152)
         val freq = Mhi88Encoder.FREQ
         val pattern = if (use152) Mhi152Encoder.toPattern(next) else Mhi88Encoder.toPattern(next)
         return tx.transmit(freq, pattern)
     }
+
+    fun restore(s: AcState, use152Flag: Boolean) {
+        use152 = use152Flag
+        _state.value = s
+    }
+
     fun togglePower() = send(_state.value.copy(power = !_state.value.power))
     fun setTemp(t: Int) = send(_state.value.copy(temp = t.coerceIn(18, 30)))
     fun setMode(m: Mode) = send(_state.value.copy(mode = m))
